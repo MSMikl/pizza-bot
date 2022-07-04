@@ -15,9 +15,8 @@ def main():
     with open('menu.json', 'r', encoding='UTF-8') as file:
         menu = json.load(file)
     token, _ = get_auth_token(base_url, client_id)
-    for pizza in menu:
-        create_product(base_url, token, pizza)
-    # upload_image(base_url, token, menu[0]['product_image']['url'])
+    create_product(base_url, token, menu[0])
+    upload_image(base_url, token, menu[0]['product_image']['url'])
 
 
 def get_auth_token(url, client_id):
