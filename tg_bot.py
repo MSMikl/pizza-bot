@@ -14,7 +14,7 @@ from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
 from shop import (
     get_products, get_auth_token, get_file_link, add_item_to_cart,
-    get_cart, delete_item, create_customer,
+    get_cart, delete_item, create_or_update_customer,
     fetch_coordinates, get_pizzerias
 )
 
@@ -214,6 +214,14 @@ def get_coordinates(update: Update, context: CallbackContext):
         )
         return 'WAITING_LOCATION'
 
+    print(create_or_update_customer(
+        context.bot_data['store_token'],
+        context.bot_data['base_url'],
+        str(update.effective_chat.id),
+        latitude=lat,
+        longitude=lon,
+        address=user_reply.text
+    ))
     pizzerias = get_pizzerias(
         context.bot_data['store_token'],
         context.bot_data['base_url']

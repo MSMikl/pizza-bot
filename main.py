@@ -26,14 +26,14 @@ def main():
 
     # # Создаем Flow
 
-    # create_flow(base_url, token, "Pizzeria's data", "pizzeria", "Pizzeria")
+    # create_flow(base_url, token, "Customer's data", "customers", "Customer")
 
     # # Создаем поля
 
-    # create_or_update_field(base_url, token, "Адрес", "address", "string", "Адрес пиццерии", "pizzeria")
+    create_or_update_field(base_url, token, "Телеграм доставщика", "courier_tg", "string", "", "pizzeria")
     # create_or_update_field(base_url, token, "Название", "alias", "string", "Неофициальное название пиццерии", "pizzeria")
-    # create_or_update_field(base_url, token, "Широта", "latitude", "string", "Широта, координаты", "pizzeria")
-    # create_or_update_field(base_url, token, "Долгота", "longitude", "string", "Долгота, координаты", "pizzeria")
+    # create_or_update_field(base_url, token, "Широта", "latitude", "string", "Широта, координаты", "customers")
+    # create_or_update_field(base_url, token, "Долгота", "longitude", "string", "Долгота, координаты", "customers")
 
     # # Вносим данные пиццерий
 
@@ -45,6 +45,29 @@ def main():
     #         'longitude': pizzeria.get('coordinates', {0:0}).get('lon')
     #     }
     #     create_entry(base_url, token, 'pizzeria', entry_data)
+
+    headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+    }
+    response = requests.get(f"{base_url}/v2/flows/pizzeria/entries", headers=headers)
+    response.raise_for_status()
+    for pizzeria in response.json()['data']:
+        data = {
+            'data': {
+                'type': 'entry',
+                'courier_tg': '@Michalbl4',
+                'id': pizzeria['id']
+            }
+        }
+        response_1 = requests.put(
+            f"{base_url}/v2/flows/pizzeria/entries/{pizzeria['id']}",
+            headers=headers,
+            json=data
+        )
+        response_1.raise_for_status()
+
+
 
 
 def clear_catalog(url, token):

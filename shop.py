@@ -103,7 +103,15 @@ def extract_data_from_cart(full_cart_data):
     return result
 
 
-def create_customer(token, url, user_name, user_email=None):
+def create_or_update_customer(
+    token,
+    url,
+    user_name,
+    user_email=None,
+    address=None,
+    latitude=None,
+    longitude=None
+):
     headers = {
         'Authorization': token,
         'Content-Type': 'application/json'
@@ -112,9 +120,23 @@ def create_customer(token, url, user_name, user_email=None):
         'data': {
             'type': 'customer',
             'name': user_name,
-            'email': user_email
+            'email': (user_email if user_email else f"{user_name}@email.com"),
+            'latitude': latitude,
+            'longitude': longitude,
+            'address': address
         }
     }
+    response = requests.get(f"{url}/v2/customers", headers=headers)
+    response.raise_for_status()
+    for customer in response.json()['data']:
+        if customer.get('name') == user_name:
+            response = requests.put(
+                f"{url}/v2/customers/{customer['id']}",
+                headers=headers,
+                json=data
+            )
+            response.raise_for_status()
+            return response.json()
     response = requests.post(f"{url}/v2/customers", headers=headers, json=data)
     response.raise_for_status()
     return response.json()
