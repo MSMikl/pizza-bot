@@ -1,6 +1,8 @@
 import json
 import os
 
+from pprint import pprint
+
 import requests
 
 from dotenv import load_dotenv
@@ -9,22 +11,74 @@ from dotenv import load_dotenv
 def main():
     load_dotenv()
     client_id = os.getenv('CLIENT_ID')
+    store_id = os.getenv('STORE_ID')
+    client_secret = os.getenv('CLIENT_SECRET')
     base_url = 'https://api.moltin.com'
     with open('addresses.json', 'r', encoding='UTF-8') as file:
         addresses = json.load(file)
-    with open('menu.json', 'r', encoding='UTF-8') as file:
-        menu = json.load(file)
-    token, _ = get_auth_token(base_url, client_id)
-    create_product(base_url, token, menu[0])
-    upload_image(base_url, token, menu[0]['product_image']['url'])
+    # with open('menu.json', 'r', encoding='UTF-8') as file:
+    #     menu = json.load(file)
+    token, _ = get_auth_token(base_url, client_id, store_id, client_secret)
+    # clear_catalog(base_url, token)
+    # for pizza in menu:
+    #  pizza_image_id = upload_image(base_url, token, pizza['product_image']['url'])
+    #  create_product(base_url, token, pizza, pizza_image_id)
+
+    # # Создаем Flow
+
+    # create_flow(base_url, token, "Pizzeria's data", "pizzeria", "Pizzeria")
+
+    # # Создаем поля
+
+    # create_or_update_field(base_url, token, "Адрес", "address", "string", "Адрес пиццерии", "pizzeria")
+    # create_or_update_field(base_url, token, "Название", "alias", "string", "Неофициальное название пиццерии", "pizzeria")
+    # create_or_update_field(base_url, token, "Широта", "latitude", "string", "Широта, координаты", "pizzeria")
+    # create_or_update_field(base_url, token, "Долгота", "longitude", "string", "Долгота, координаты", "pizzeria")
+
+    # # Вносим данные пиццерий
+
+    # for pizzeria in addresses:
+    #     entry_data = {
+    #         'alias': pizzeria.get('alias'),
+    #         'address': pizzeria.get('address', {0:0}).get('full'),
+    #         'latitude': pizzeria.get('coordinates', {0:0}).get('lat'),
+    #         'longitude': pizzeria.get('coordinates', {0:0}).get('lon')
+    #     }
+    #     create_entry(base_url, token, 'pizzeria', entry_data)
 
 
-def get_auth_token(url, client_id):
+def clear_catalog(url, token):
+    headers = {
+        'Authorization': token,
+    }
+    response = requests.get(f"{url}/v2/products", headers=headers)
+    response.raise_for_status()
+    pizzas = response.json()['data']
+    for pizza in pizzas:
+        response = requests.delete(
+            f"{url}/v2/products/{pizza['id']}",
+            headers=headers
+        )
+        print(response.text)
+    response = requests.get(f"{url}/v2/products", headers=headers)
+    response.raise_for_status()
+
+
+def get_auth_token(url, client_id, store_id, client_secret):
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+    }
     data = {
         'client_id': client_id,
-        'grant_type': 'implicit'
+        'store_id': store_id,
+        'client_secret': client_secret,
+        'grant_type': 'client_credentials'
     }
-    response = requests.post(f'{url}/oauth/access_token', data=data)
+    response = requests.post(
+        f'{url}/oauth/access_token',
+        data=data,
+        headers=headers
+    )
     response.raise_for_status()
     auth_info = response.json()
     return (
@@ -35,19 +89,20 @@ def get_auth_token(url, client_id):
 
 def upload_image(url, token, image_url):
     headers = {
-        'Authorization': token
+        'Authorization': token,
     }
     file = {
-        'file_location': image_url
+        'file_location': (None, image_url)
     }
     response = requests.post(f"{url}/v2/files", headers=headers, files=file)
-    print(response.text)
+    response.raise_for_status()
+    return response.json()['data']['id']
 
 
-def create_product(url, token, product_data: dict):
+def create_product(url, token, product_data: dict, product_image=None):
     headers = {
         'Authorization': token,
-        # 'Content-Type': 'application/json'
+        'Content-Type': 'application/json'
     }
     data = {'data': {
         'type': 'product',
@@ -58,19 +113,153 @@ def create_product(url, token, product_data: dict):
         'description': product_data['description'],
         'price': [
             {
-                'price_amount': product_data['price'],
-                'price_currency': 'USD'
+                'amount': product_data['price'],
+                'currency': 'RUB',
+                'includes_tax': True
             }
         ],
         'status': 'live',
         'commodity_type': 'physical'
             }
     }
-    response = requests.get(f"{url}/v2/products", headers=headers)
+    response = requests.post(
+        f"{url}/v2/products",
+        json=data,
+        headers=headers
+    )
+    response.raise_for_status()
+
+    if not product_image:
+        return
+    product_id = response.json()['data']['id']
+    data = {
+        'data': {
+            'type': 'main_image',
+            'id': product_image
+        }
+    }
+    response = requests.post(
+        f"{url}/v2/products/{product_id}/relationships/main-image",
+        json=data,
+        headers=headers
+    )
+    response.raise_for_status()
+
+
+def create_flow(
+    url,
+    token,
+    description,
+    slug,
+    name
+):
+    headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+    }
+    data = {
+        'data': {
+            'type': 'flow',
+            'name': name,
+            'description': description,
+            'slug': slug,
+            'enabled': True
+
+        }
+    }
+    response = requests.post(
+        f"{url}/v2/flows",
+        json=data,
+        headers=headers
+    )
+    response.raise_for_status()
+    print(response.json())
+    return response.json()['data']['id']
+
+
+def create_or_update_field(
+    url,
+    token,
+    name,
+    slug,
+    field_type,
+    description,
+    base_flow
+):
+    headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+    }
+    data = {
+        'data': {
+            'type': 'field',
+            'name': name,
+            'slug': slug,
+            'field_type': field_type,
+            'description': description,
+            'required': False,
+            'enabled': True,
+            'relationships': {
+                'flow': {
+                    'data': {
+                        'type': 'flow'
+                    }
+                }
+            }
+        }
+    }
+    response = requests.get(f"{url}/v2/flows/", headers=headers)
+    response.raise_for_status()
+    pprint(response.json())
+    for flow in response.json()['data']:
+        if flow['slug'] == base_flow:
+            flow_id = flow['id']
+            data['data']['relationships']['flow']['data']['id'] = flow_id
+            break
+
+    response = requests.get(
+        f"{url}/v2/flows/{base_flow}/fields",
+        headers=headers
+    )
+    response.raise_for_status()
+    field_id = None
+    for field in response.json()['data']:
+        if field['slug'] == slug or field['name'] == name:
+            field_id = field['id']
+    if field_id:
+        response = requests.put(
+            f"{url}/v2/fields/{field_id}",
+            headers=headers,
+            json=data
+        )
+        print(response.text)
+        response.raise_for_status()
+        return
+    response = requests.post(
+        f"{url}/v2/fields",
+        headers=headers,
+        json=data
+    )
     print(response.text)
-    # Вот здесь вылезает ошибка - неавторизованный реквест
-    response = requests.post(f"{url}/v2/products", json=data, headers=headers)
-    print(response.text)
+    response.raise_for_status()
+
+
+def create_entry(url, token, flow_slug, entry_data: dict):
+    data = {
+        'data': entry_data
+    }
+    headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+    }
+    data['data']['type'] = 'entry'
+    response = requests.post(
+        f"{url}/v2/flows/{flow_slug}/entries",
+        headers=headers,
+        json=data
+    )
+    response.raise_for_status()
+    pprint(response.json())
 
 
 if __name__ == '__main__':
