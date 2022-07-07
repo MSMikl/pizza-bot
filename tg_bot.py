@@ -213,11 +213,7 @@ def get_coordinates(update: Update, context: CallbackContext):
             text='Не удалось определить ваше местоположение. Пожалуйста, введите корректный адрес'
         )
         return 'WAITING_LOCATION'
-    context.bot.send_location(
-        chat_id=update.effective_chat.id,
-        latitude=lat,
-        longitude=lon
-    )
+
     pizzerias = get_pizzerias(
         context.bot_data['store_token'],
         context.bot_data['base_url']
@@ -226,18 +222,39 @@ def get_coordinates(update: Update, context: CallbackContext):
     range = distance((lat, lon), (closest_pizzeria['latitude'], closest_pizzeria['longitude']))
     text = f"Ближайшая к вам пиццерия находится по адресу {closest_pizzeria['address']} на расстоянии {round(range.km, 1)} км"
     if range.km <= 0.5:
-        text += '\nМожем доставить вам пиццу бесплатно'
+        text += '\nОтсюда можем доставить вам пиццу бесплатно. Или вы можете забрать ее самостоятельно'
+        keyboard = [
+            [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')],
+            [InlineKeyboardButton('Доставка', callback_data='delivery')]
+        ]
     elif range.km <= 5:
         text += '\nСтоимость доставки до вас от ближайшей пиццерии - 100 рублей'
+        keyboard = [
+            [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')],
+            [InlineKeyboardButton('Доставка', callback_data='delivery')]
+        ]
     elif range.km <= 20:
         text += '\nСтоимость доставки до вас от ближайшей пиццерии - 300 рублей'
+        keyboard = [
+            [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')],
+            [InlineKeyboardButton('Доставка', callback_data='delivery')]
+        ]
     else:
         text += '\nК сожалению, до вашего адреса пиццу мы доставить не сможем.\nНо вы можете забрать ее самостоятельно'
+        keyboard = [
+            [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')]
+        ]
+    context.bot.send_location(
+        chat_id=update.effective_chat.id,
+        latitude=closest_pizzeria['latitude'],
+        longitude=closest_pizzeria['longitude']
+    )
     context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text=text
+            text=text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    return 'FINISH'
+    return 'PICKUP_OR_DELIVERY'
 
     # if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", user_reply):
     #     return payment(update, context)
