@@ -30,7 +30,7 @@ def main():
 
     # # Создаем поля
 
-    create_or_update_field(base_url, token, "Телеграм доставщика", "courier_tg", "string", "", "pizzeria")
+    # create_or_update_field(base_url, token, "Телеграм доставщика", "courier_tg", "string", "", "pizzeria")
     # create_or_update_field(base_url, token, "Название", "alias", "string", "Неофициальное название пиццерии", "pizzeria")
     # create_or_update_field(base_url, token, "Широта", "latitude", "string", "Широта, координаты", "customers")
     # create_or_update_field(base_url, token, "Долгота", "longitude", "string", "Долгота, координаты", "customers")
@@ -56,7 +56,7 @@ def main():
         data = {
             'data': {
                 'type': 'entry',
-                'courier_tg': '@Michalbl4',
+                'courier_tg': '176649151',
                 'id': pizzeria['id']
             }
         }

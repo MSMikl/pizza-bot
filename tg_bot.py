@@ -214,14 +214,16 @@ def get_coordinates(update: Update, context: CallbackContext):
         )
         return 'WAITING_LOCATION'
 
-    print(create_or_update_customer(
+    create_or_update_customer(
         context.bot_data['store_token'],
         context.bot_data['base_url'],
         str(update.effective_chat.id),
         latitude=lat,
         longitude=lon,
         address=user_reply.text
-    ))
+    )
+    context.bot_data['longitude'] = lon
+    context.bot_data['latitude'] = lat
     pizzerias = get_pizzerias(
         context.bot_data['store_token'],
         context.bot_data['base_url']
@@ -245,7 +247,7 @@ def get_coordinates(update: Update, context: CallbackContext):
         text += '\nСтоимость доставки до вас от ближайшей пиццерии - 300 рублей'
         keyboard = [
             [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')],
-            [InlineKeyboardButton('Доставка', callback_data='delivery')]
+            [InlineKeyboardButton('Доставка', callback_data=closest_pizzeria['courier_tg'])]
         ]
     else:
         text += '\nК сожалению, до вашего адреса пиццу мы доставить не сможем.\nНо вы можете забрать ее самостоятельно'
@@ -264,19 +266,36 @@ def get_coordinates(update: Update, context: CallbackContext):
         )
     return 'PICKUP_OR_DELIVERY'
 
-    # if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", user_reply):
-    #     return payment(update, context)
-    # context.bot.send_message(
-    #     chat_id=update.effective_chat.id,
-    #     text=f"Вы оставили почту {user_reply}"
-    # )
-    # create_customer(
-    #     context.bot_data['store_token'],
-    #     context.bot_data['base_url'],
-    #     str(update.effective_chat.id),
-    #     user_reply
-    # )
-    # return 'FINISH'
+
+def order_delivery(update: Update, context: CallbackContext):
+    query = update.callback_query
+    print(query.data)
+    if query.data == 'self_pickup':
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Отлично ждем вас в нащей пиццерии'
+        )
+        message = update.effective_message
+        context.bot.delete_message(
+            chat_id=message.chat_id,
+            message_id=message.message_id
+        )
+        return 'FINISH'
+    cart = get_cart(
+        context.bot_data['store_token'],
+        context.bot_data['base_url'],
+        update.effective_chat.id
+    )
+    context.bot.send_message(
+        chat_id=int(query.data),
+        text=make_cart_description(cart)
+    )
+    context.bot.send_location(
+        chat_id=int(query.data),
+        latitude=context.bot_data['latitude'],
+        longitude=context.bot_data['longitude']
+    )
+    return 'FINISH'
 
 
 def handle_cart(update: Update, context: CallbackContext):
@@ -330,7 +349,8 @@ def user_input_handler(update: Update, context: CallbackContext):
         'PRODUCT_CHOICE': handle_product,
         'HANDLE_MENU': handle_menu,
         'HANDLE_CART': handle_cart,
-        'WAITING_LOCATION': get_coordinates
+        'WAITING_LOCATION': get_coordinates,
+        'PICKUP_OR_DELIVERY': order_delivery
     }
 
     state_handler = states_function[user_state]
