@@ -273,7 +273,7 @@ def order_delivery(update: Update, context: CallbackContext):
     if query.data == 'self_pickup':
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Отлично ждем вас в нащей пиццерии'
+            text='Отлично ждем вас в нашей пиццерии'
         )
         message = update.effective_message
         context.bot.delete_message(
@@ -281,6 +281,15 @@ def order_delivery(update: Update, context: CallbackContext):
             message_id=message.message_id
         )
         return 'FINISH'
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Передали заказ в доставку. Ожидайте курьера в течение часа'
+    )
+    message = update.effective_message
+    context.bot.delete_message(
+        chat_id=message.chat_id,
+        message_id=message.message_id
+    )
     cart = get_cart(
         context.bot_data['store_token'],
         context.bot_data['base_url'],
@@ -295,7 +304,19 @@ def order_delivery(update: Update, context: CallbackContext):
         latitude=context.bot_data['latitude'],
         longitude=context.bot_data['longitude']
     )
+    context.job_queue.run_once(
+        send_follow_up_message,
+        3600,  # Задержка отправки follow-up сообщения в секундах
+        context=update.effective_chat.id
+    )
     return 'FINISH'
+
+
+def send_follow_up_message(context: CallbackContext):
+    context.bot.send_message(
+        chat_id=context.job.context,
+        text='Приятного аппетита, надеемся, вам понравилась пицца.\nЕсли вы до сих пор ее не получили, то...'
+    )
 
 
 def handle_cart(update: Update, context: CallbackContext):
