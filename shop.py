@@ -3,10 +3,11 @@ import os
 import requests
 
 
-def get_auth_token(url, client_id):
+def get_auth_token(url, client_id, client_secret):
     data = {
         'client_id': client_id,
-        'grant_type': 'implicit'
+        'client_secret': client_secret,
+        'grant_type': 'client_credentials'
     }
     response = requests.post(f'{url}/oauth/access_token', data=data)
     response.raise_for_status()
@@ -127,6 +128,15 @@ def create_product(token, url, product_data: dict):
     data = product_data
     response = requests.post(f"{url}/v2/products", headers=headers, json=data)
     print(response.text)
+
+
+def get_pizzerias(token, url):
+    headers = {
+        "Authorization": token
+    }
+    response = requests.get(f"{url}/v2/flows/pizzeria/entries", headers=headers)
+    response.raise_for_status()
+    return response.json().get('data')
 
 
 def fetch_coordinates(address):

@@ -1,19 +1,22 @@
 import os
-import re
 
-from pprint import pprint
 from textwrap import dedent
 
 import redis
 
 from dotenv import load_dotenv
+from geopy.distance import distance
 from more_itertools import chunked
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Filters, Updater, CallbackContext
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
-from shop import get_products, get_auth_token, get_file_link, add_item_to_cart, get_cart, delete_item, create_customer, fetch_coordinates
+from shop import (
+    get_products, get_auth_token, get_file_link, add_item_to_cart,
+    get_cart, delete_item, create_customer,
+    fetch_coordinates, get_pizzerias
+)
 
 
 DB = None
@@ -63,21 +66,21 @@ def handle_product(update: Update, context: CallbackContext):
         keyboard = (
             context.bot_data['product_keyboards'][page_number] +
             [[InlineKeyboardButton(
-            'Еще',
-            callback_data=(
-                page_number + 1
-                if page_number < len(context.bot_data['product_keyboards']) - 1
-                else 0
-            )
-        )]] +
-        [[InlineKeyboardButton('Моя корзина', callback_data='show_cart')]]
+                'Еще',
+                callback_data=(
+                    page_number + 1
+                    if page_number < len(context.bot_data['product_keyboards']) - 1
+                    else 0
+                )
+            )]] +
+            [[InlineKeyboardButton('Моя корзина', callback_data='show_cart')]]
         )
         message = update.effective_message
         context.bot.edit_message_text(
             chat_id=message.chat.id,
             message_id=message.message_id,
             text=message.text,
-            reply_markup = InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return 'PRODUCT_CHOICE'
 
@@ -215,6 +218,25 @@ def get_coordinates(update: Update, context: CallbackContext):
         latitude=lat,
         longitude=lon
     )
+    pizzerias = get_pizzerias(
+        context.bot_data['store_token'],
+        context.bot_data['base_url']
+        )
+    closest_pizzeria = min(pizzerias, key=lambda x: distance((lat, lon), (x.get('latitude'), x.get('longitude'))))
+    range = distance((lat, lon), (closest_pizzeria['latitude'], closest_pizzeria['longitude']))
+    text = f"Ближайшая к вам пиццерия находится по адресу {closest_pizzeria['address']} на расстоянии {round(range.km, 1)} км"
+    if range.km <= 0.5:
+        text += '\nМожем доставить вам пиццу бесплатно'
+    elif range.km <= 5:
+        text += '\nСтоимость доставки до вас от ближайшей пиццерии - 100 рублей'
+    elif range.km <= 20:
+        text += '\nСтоимость доставки до вас от ближайшей пиццерии - 300 рублей'
+    else:
+        text += '\nК сожалению, до вашего адреса пиццу мы доставить не сможем.\nНо вы можете забрать ее самостоятельно'
+    context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=text
+        )
     return 'FINISH'
 
     # if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", user_reply):
@@ -295,7 +317,8 @@ def user_input_handler(update: Update, context: CallbackContext):
 def refresh_token(context: CallbackContext):
     context.bot_data['store_token'], context.bot_data['token_lifetime'] = get_auth_token(
         context.bot_data['base_url'],
-        context.bot_data['client_id']
+        context.bot_data['client_id'],
+        context.bot_data['client_secret']
     )
     # Каждый раз в случае успешного получения токена убираем предыдущее запланированное задание
     # и создаем новое с новым периодом обновленя
@@ -312,6 +335,7 @@ def main():
     updater = Updater(tg_token)
     updater.dispatcher.bot_data['base_url'] = 'https://api.moltin.com'
     updater.dispatcher.bot_data['client_id'] = os.getenv('CLIENT_ID')
+    updater.dispatcher.bot_data['client_secret'] = os.getenv('CLIENT_SECRET')
     updater.dispatcher.bot_data['pagesize'] = 8  # Размер страницы списка пицц
     # В начале создаем задание по регулярному обновлению токена с дефолтным периодом 120 секунд
     updater.dispatcher.bot_data['refreshing'] = updater.job_queue.run_repeating(
