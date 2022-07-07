@@ -1,3 +1,5 @@
+import os
+
 import requests
 
 
@@ -100,7 +102,7 @@ def extract_data_from_cart(full_cart_data):
     return result
 
 
-def create_customer(token, url, user_name, user_email):
+def create_customer(token, url, user_name, user_email=None):
     headers = {
         'Authorization': token,
         'Content-Type': 'application/json'
@@ -125,3 +127,22 @@ def create_product(token, url, product_data: dict):
     data = product_data
     response = requests.post(f"{url}/v2/products", headers=headers, json=data)
     print(response.text)
+
+
+def fetch_coordinates(address):
+    apikey = os.getenv('YANDEX_API_KEY')
+    base_url = "https://geocode-maps.yandex.ru/1.x"
+    response = requests.get(base_url, params={
+        "geocode": address,
+        "apikey": apikey,
+        "format": "json",
+    })
+    response.raise_for_status()
+    found_places = response.json()['response']['GeoObjectCollection']['featureMember']
+
+    if not found_places:
+        return None, None
+
+    most_relevant = found_places[0]
+    lon, lat = most_relevant['GeoObject']['Point']['pos'].split(" ")
+    return lon, lat

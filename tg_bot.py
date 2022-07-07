@@ -13,7 +13,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Filters, Updater, CallbackContext
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
 
-from shop import get_products, get_auth_token, get_file_link, add_item_to_cart, get_cart, delete_item, create_customer
+from shop import get_products, get_auth_token, get_file_link, add_item_to_cart, get_cart, delete_item, create_customer, fetch_coordinates
 
 
 DB = None
@@ -134,14 +134,13 @@ def handle_menu(update: Update, context: CallbackContext):
     elif query.data == 'show_cart':
         return show_cart(update, context)
     sku = query.data
-    add_item_to_cart(
+    cart = add_item_to_cart(
         context.bot_data['store_token'],
         context.bot_data['base_url'],
         cart_id=update.effective_chat.id,
         sku=sku,
         quantity=1
         )
-
     query.answer(text='Добавили в корзину')
 
     return 'HANDLE_MENU'
@@ -188,31 +187,49 @@ def show_cart(update: Update, context: CallbackContext):
 def payment(update: Update, context: CallbackContext):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Пожалуйста, оставьте свою почту, чтобы мы связались с вами по оплате'
+        text='Пожалуйста, напишите свой адрес для доставки или пришлите геолокацию'
     )
     message = update.effective_message
     context.bot.delete_message(
         chat_id=message.chat_id,
         message_id=message.message_id
     )
-    return 'WAITING_EMAIL'
+    return 'WAITING_LOCATION'
 
 
-def get_email(update: Update, context: CallbackContext):
-    user_reply = update.message.text
-    if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", user_reply):
-        return payment(update, context)
-    context.bot.send_message(
+def get_coordinates(update: Update, context: CallbackContext):
+    user_reply = update.message
+    if user_reply.location:
+        lat = user_reply.location.latitude
+        lon = user_reply.location.longitude
+    else:
+        lon, lat = fetch_coordinates(user_reply.text)
+    if not lon:
+        context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text='Не удалось определить ваше местоположение. Пожалуйста, введите корректный адрес'
+        )
+        return 'WAITING_LOCATION'
+    context.bot.send_location(
         chat_id=update.effective_chat.id,
-        text=f"Вы оставили почту {user_reply}"
-    )
-    create_customer(
-        context.bot_data['store_token'],
-        context.bot_data['base_url'],
-        str(update.effective_chat.id),
-        user_reply
+        latitude=lat,
+        longitude=lon
     )
     return 'FINISH'
+
+    # if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", user_reply):
+    #     return payment(update, context)
+    # context.bot.send_message(
+    #     chat_id=update.effective_chat.id,
+    #     text=f"Вы оставили почту {user_reply}"
+    # )
+    # create_customer(
+    #     context.bot_data['store_token'],
+    #     context.bot_data['base_url'],
+    #     str(update.effective_chat.id),
+    #     user_reply
+    # )
+    # return 'FINISH'
 
 
 def handle_cart(update: Update, context: CallbackContext):
@@ -266,7 +283,7 @@ def user_input_handler(update: Update, context: CallbackContext):
         'PRODUCT_CHOICE': handle_product,
         'HANDLE_MENU': handle_menu,
         'HANDLE_CART': handle_cart,
-        'WAITING_EMAIL': get_email
+        'WAITING_LOCATION': get_coordinates
     }
 
     state_handler = states_function[user_state]
@@ -295,7 +312,7 @@ def main():
     updater = Updater(tg_token)
     updater.dispatcher.bot_data['base_url'] = 'https://api.moltin.com'
     updater.dispatcher.bot_data['client_id'] = os.getenv('CLIENT_ID')
-    updater.dispatcher.bot_data['pagesize'] = 8 # Размер страницы списка пицц
+    updater.dispatcher.bot_data['pagesize'] = 8  # Размер страницы списка пицц
     # В начале создаем задание по регулярному обновлению токена с дефолтным периодом 120 секунд
     updater.dispatcher.bot_data['refreshing'] = updater.job_queue.run_repeating(
         refresh_token,
@@ -311,6 +328,7 @@ def main():
     dispatcher.add_handler(CallbackQueryHandler(user_input_handler))
     dispatcher.add_handler(MessageHandler(Filters.text, user_input_handler))
     dispatcher.add_handler(CommandHandler('start', user_input_handler))
+    dispatcher.add_handler(MessageHandler(Filters.location, user_input_handler))
     updater.start_polling()
     updater.idle()
 
