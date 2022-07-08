@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 from geopy.distance import distance
 from more_itertools import chunked
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LabeledPrice, Update
 from telegram.ext import Filters, Updater, CallbackContext
-from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler
+from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, PreCheckoutQueryHandler
 
 from shop import (
     get_products, get_auth_token, get_file_link, add_item_to_cart,
@@ -133,7 +133,7 @@ def handle_menu(update: Update, context: CallbackContext):
     if query.data == 'back' or query.data == 'continue':
         return start(update, context)
     elif query.data == 'pay':
-        return payment(update, context)
+        return request_address(update, context)
     elif query.data == 'show_cart':
         return show_cart(update, context)
     sku = query.data
@@ -149,19 +149,6 @@ def handle_menu(update: Update, context: CallbackContext):
     return 'HANDLE_MENU'
 
 
-def make_cart_description(cart):
-    cart_content_text = '\n    '.join([
-        f"{item['name']} {item['quantity']} шт. - {item['unit_price']*item['quantity']}"
-        for item in cart.get('items')
-    ])
-    text = dedent(f"""
-    Сейчас у вас в корзине:
-    {cart_content_text}
-    Общая цена {cart.get('total_price', 0)}
-    """)
-    return text
-
-
 def show_cart(update: Update, context: CallbackContext):
     cart = get_cart(
         context.bot_data['store_token'],
@@ -174,10 +161,10 @@ def show_cart(update: Update, context: CallbackContext):
     ]
     keyboard.append([InlineKeyboardButton('Продолжить покупки', callback_data='continue')])
     if cart['total_price']:
-        keyboard.append([InlineKeyboardButton('Оплатить', callback_data='pay')])
+        keyboard.append([InlineKeyboardButton('Перейти к оформлению заказа', callback_data='pay')])
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text=make_cart_description(cart),
+        text=f"Сейчас у вас в корзине:\n{make_cart_description(cart)}",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
     context.bot.delete_message(
@@ -187,7 +174,22 @@ def show_cart(update: Update, context: CallbackContext):
     return 'HANDLE_CART'
 
 
-def payment(update: Update, context: CallbackContext):
+def handle_cart(update: Update, context: CallbackContext):
+    query = update.callback_query
+    if query.data == 'continue':
+        return start(update, context)
+    elif query.data == 'pay':
+        return request_address(update, context)
+    delete_item(
+        context.bot_data['store_token'],
+        context.bot_data['base_url'],
+        update.effective_chat.id,
+        query.data
+    )
+    return show_cart(update, context)
+
+
+def request_address(update: Update, context: CallbackContext):
     context.bot.send_message(
         chat_id=update.effective_chat.id,
         text='Пожалуйста, напишите свой адрес для доставки или пришлите геолокацию'
@@ -235,19 +237,22 @@ def get_coordinates(update: Update, context: CallbackContext):
         text += '\nОтсюда можем доставить вам пиццу бесплатно. Или вы можете забрать ее самостоятельно'
         keyboard = [
             [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')],
-            [InlineKeyboardButton('Доставка', callback_data='delivery')]
+            [InlineKeyboardButton(
+                'Доставка',
+                callback_data=f"{closest_pizzeria['courier_tg']}/0"
+            )]
         ]
     elif range.km <= 5:
         text += '\nСтоимость доставки до вас от ближайшей пиццерии - 100 рублей'
         keyboard = [
             [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')],
-            [InlineKeyboardButton('Доставка', callback_data='delivery')]
+            [InlineKeyboardButton('Доставка', callback_data=f"{closest_pizzeria['courier_tg']}/100")]
         ]
     elif range.km <= 20:
         text += '\nСтоимость доставки до вас от ближайшей пиццерии - 300 рублей'
         keyboard = [
             [InlineKeyboardButton('Самовывоз', callback_data='self_pickup')],
-            [InlineKeyboardButton('Доставка', callback_data=closest_pizzeria['courier_tg'])]
+            [InlineKeyboardButton('Доставка', callback_data=f"{closest_pizzeria['courier_tg']}/300")]
         ]
     else:
         text += '\nК сожалению, до вашего адреса пиццу мы доставить не сможем.\nНо вы можете забрать ее самостоятельно'
@@ -269,7 +274,6 @@ def get_coordinates(update: Update, context: CallbackContext):
 
 def order_delivery(update: Update, context: CallbackContext):
     query = update.callback_query
-    print(query.data)
     if query.data == 'self_pickup':
         context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -280,36 +284,70 @@ def order_delivery(update: Update, context: CallbackContext):
             chat_id=message.chat_id,
             message_id=message.message_id
         )
-        return 'FINISH'
-    context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text='Передали заказ в доставку. Ожидайте курьера в течение часа'
-    )
-    message = update.effective_message
-    context.bot.delete_message(
-        chat_id=message.chat_id,
-        message_id=message.message_id
-    )
+        return
+
+    # Сохраняем телеграм-чат курьера для последующей отправки ему уведомления в случае успешной оплаты заказа
+    # и стоимость доставки
+    context.bot_data['courier_tg'], delivery_cost = map(int, query.data.split('/'))
+
+    # Извлекаем корзину и отправляем счет на ее оплату 
     cart = get_cart(
         context.bot_data['store_token'],
         context.bot_data['base_url'],
         update.effective_chat.id
     )
+
     context.bot.send_message(
-        chat_id=int(query.data),
-        text=make_cart_description(cart)
+            chat_id=update.effective_chat.id,
+            text=dedent(f"""
+            Итак, ваш заказ:\n{make_cart_description(cart)}
+            Стоимость доставки: {delivery_cost}
+            Общая стоимость заказа: {cart['total_price']+delivery_cost}""")
+        )
+
+    context.bot.send_invoice(
+        chat_id=update.effective_chat.id,
+        title='Ваш заказ',
+        description=f"Общая стоимость заказа {cart['total_price']} р.",
+        provider_token=os.getenv('PAYMENT_TOKEN'),
+        currency='RUB',
+        prices=[LabeledPrice('Общая сумма', (cart['total_price'] + delivery_cost) * 100)],
+        payload="Test_payment"
+    )
+
+    return 'AWAITING_PAYMENT'
+
+
+def final_messages(update: Update, context: CallbackContext):
+
+    context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text='Оплата завершена. Передали заказ в доставку. Ожидайте курьера в течение часа'
+    )
+
+    # Отправка заказа курьеру для доставки
+    cart = get_cart(
+        context.bot_data['store_token'],
+        context.bot_data['base_url'],
+        update.effective_chat.id
+    )
+
+    context.bot.send_message(
+        chat_id=context.bot_data['courier_tg'],
+        text=f"Заказ для доставки:\n{make_cart_description(cart)}"
     )
     context.bot.send_location(
-        chat_id=int(query.data),
+        chat_id=context.bot_data['courier_tg'],
         latitude=context.bot_data['latitude'],
         longitude=context.bot_data['longitude']
     )
+
+    # Отправка follow-up сообщения
     context.job_queue.run_once(
         send_follow_up_message,
         3600,  # Задержка отправки follow-up сообщения в секундах
         context=update.effective_chat.id
     )
-    return 'FINISH'
 
 
 def send_follow_up_message(context: CallbackContext):
@@ -317,21 +355,6 @@ def send_follow_up_message(context: CallbackContext):
         chat_id=context.job.context,
         text='Приятного аппетита, надеемся, вам понравилась пицца.\nЕсли вы до сих пор ее не получили, то...'
     )
-
-
-def handle_cart(update: Update, context: CallbackContext):
-    query = update.callback_query
-    if query.data == 'continue':
-        return start(update, context)
-    elif query.data == 'pay':
-        return payment(update, context)
-    delete_item(
-        context.bot_data['store_token'],
-        context.bot_data['base_url'],
-        update.effective_chat.id,
-        query.data
-    )
-    return show_cart(update, context)
 
 
 def get_db_connection():
@@ -347,6 +370,15 @@ def get_db_connection():
             db=0
         )
     return DB
+
+
+def make_cart_description(cart):
+    cart_content_text = '\n'.join([
+        f"{item['name']} {item['quantity']} шт. - {item['unit_price']*item['quantity']}"
+        for item in cart.get('items')
+    ])
+    text = f"{cart_content_text}\nОбщая цена: {cart.get('total_price', 0)}"
+    return text
 
 
 def user_input_handler(update: Update, context: CallbackContext):
@@ -378,6 +410,19 @@ def user_input_handler(update: Update, context: CallbackContext):
 
     next_state = state_handler(update, context)
     db.set(chat_id, next_state)
+
+
+def pre_checkout(update: Update, context: CallbackContext):
+    query = update.pre_checkout_query
+    if query.invoice_payload != "Test_payment":
+        query.answer(
+            ok=False,
+            error_message="Something went wrong..."
+        )
+    else:
+        query.answer(
+            ok=True
+        )
 
 
 def refresh_token(context: CallbackContext):
@@ -416,9 +461,11 @@ def main():
     updater.bot.set_my_commands(bot_commands)
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(user_input_handler))
+    dispatcher.add_handler(MessageHandler(Filters.successful_payment, final_messages))
     dispatcher.add_handler(MessageHandler(Filters.text, user_input_handler))
     dispatcher.add_handler(CommandHandler('start', user_input_handler))
     dispatcher.add_handler(MessageHandler(Filters.location, user_input_handler))
+    dispatcher.add_handler(PreCheckoutQueryHandler(pre_checkout))
     updater.start_polling()
     updater.idle()
 
