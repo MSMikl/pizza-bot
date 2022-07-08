@@ -8,7 +8,9 @@
 
 Backend магазина работает на сервисе https://www.elasticpath.com/
 
-дополнительно используется база **Redis** - можно воспользоваться бесплатной на сервисе https://redislabs.com/
+Дополнительно используется база **Redis** - можно воспользоваться бесплатной на сервисе https://redislabs.com/
+
+Для распознавания адреса используется сервис https://yandex.ru/dev/maps/geocoder/ - также следует получить ключ
 
 ## Требования к установке
 
@@ -20,16 +22,24 @@ Backend магазина работает на сервисе https://www.elasti
 
 Пароли и токены следует поместить в файл `.env`:
 
-     STORE_ID = {Из магазина}
-     CLIENT_ID = {Из магазина}
-     CLIENT_SECRET = {Из магазина}
+     STORE_ID = {Данные Elascticpath}
+     CLIENT_ID = {Данные Elascticpath}
+     CLIENT_SECRET = {Данные Elascticpath}
      TG_TOKEN = {Токен телеграм-бота}
-     DB_HOST = 
-     DB_PORT = 
-     DB_PASS = 
-     YANDEX_API_KEY = 
-     PAYMENT_TOKEN = 
+     DB_HOST = {Данные Redislabs}
+     DB_PORT = {Данные Redislabs}
+     DB_PASS = {Данные Redislabs}
+     YANDEX_API_KEY = {Ключ Яндекс.Геокодер}
+     PAYMENT_TOKEN = {Токен оплаты Telegram}
 
-## Подготовка магазина
+Для наполнения магазина товарами и адресами пиццерий можно использовать вспомогательные функции, расположенные в файле `main.py`.
 
-Для наполнения магазина 
+## Запуск
+
+Телеграм-бот запускается командой
+
+    python tg_bot.py
+    
+## Рабочий бот
+
+Работающая версия бота доступна по адресу https://t.me/pizzeria16_bot
