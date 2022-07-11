@@ -230,8 +230,14 @@ def get_coordinates(update: Update, context: CallbackContext):
         context.bot_data['store_token'],
         context.bot_data['base_url']
         )
-    closest_pizzeria = min(pizzerias, key=lambda x: distance((lat, lon), (x.get('latitude'), x.get('longitude'))))
-    range = distance((lat, lon), (closest_pizzeria['latitude'], closest_pizzeria['longitude']))
+    closest_pizzeria = min(pizzerias, key=lambda x: distance(
+        (lat, lon),
+        (x.get('latitude'), x.get('longitude'))
+    ))
+    range = distance(
+        (lat, lon),
+        (closest_pizzeria['latitude'], closest_pizzeria['longitude'])
+    )
     text = f"Ближайшая к вам пиццерия находится по адресу {closest_pizzeria['address']} на расстоянии {round(range.km, 1)} км"
     if range.km <= 0.5:
         text += '\nОтсюда можем доставить вам пиццу бесплатно. Или вы можете забрать ее самостоятельно'
@@ -318,7 +324,7 @@ def order_delivery(update: Update, context: CallbackContext):
     return 'AWAITING_PAYMENT'
 
 
-def final_messages(update: Update, context: CallbackContext):
+def send_final_messages(update: Update, context: CallbackContext):
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
@@ -461,7 +467,7 @@ def main():
     updater.bot.set_my_commands(bot_commands)
     dispatcher = updater.dispatcher
     dispatcher.add_handler(CallbackQueryHandler(user_input_handler))
-    dispatcher.add_handler(MessageHandler(Filters.successful_payment, final_messages))
+    dispatcher.add_handler(MessageHandler(Filters.successful_payment, send_final_messages))
     dispatcher.add_handler(MessageHandler(Filters.text, user_input_handler))
     dispatcher.add_handler(CommandHandler('start', user_input_handler))
     dispatcher.add_handler(MessageHandler(Filters.location, user_input_handler))
