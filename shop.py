@@ -87,8 +87,8 @@ def get_cart(token, url, cart_id):
     return extract_data_from_cart(response.json())
 
 
-def extract_data_from_cart(full_cart_data):
-    result = {
+def extract_data_from_cart(cart_response_json):
+    selected_data = {
         'items': [
             {
                 'name': item['name'],
@@ -96,11 +96,11 @@ def extract_data_from_cart(full_cart_data):
                 'unit_price': item['unit_price']['amount'],
                 'id': item['id']
             }
-            for item in full_cart_data['data']
+            for item in cart_response_json['data']
         ],
-        'total_price': full_cart_data['meta']['display_price']['with_tax']['amount']
+        'total_price': cart_response_json['meta']['display_price']['with_tax']['amount']
     }
-    return result
+    return selected_data
 
 
 def create_or_update_customer(
@@ -149,7 +149,8 @@ def create_product(token, url, product_data: dict):
     }
     data = product_data
     response = requests.post(f"{url}/v2/products", headers=headers, json=data)
-    print(response.text)
+    response.raise_for_status()
+    return response.json()
 
 
 def get_pizzerias(token, url):
