@@ -8,67 +8,6 @@ import requests
 from dotenv import load_dotenv
 
 
-def main():
-    load_dotenv()
-    client_id = os.getenv('CLIENT_ID')
-    store_id = os.getenv('STORE_ID')
-    client_secret = os.getenv('CLIENT_SECRET')
-    base_url = 'https://api.moltin.com'
-    with open('addresses.json', 'r', encoding='UTF-8') as file:
-        addresses = json.load(file)
-    # with open('menu.json', 'r', encoding='UTF-8') as file:
-    #     menu = json.load(file)
-    token, _ = get_auth_token(base_url, client_id, store_id, client_secret)
-    # clear_catalog(base_url, token)
-    # for pizza in menu:
-    #  pizza_image_id = upload_image(base_url, token, pizza['product_image']['url'])
-    #  create_product(base_url, token, pizza, pizza_image_id)
-
-    # # Создаем Flow
-
-    # create_flow(base_url, token, "Customer's data", "customers", "Customer")
-
-    # # Создаем поля
-
-    # create_or_update_field(base_url, token, "Телеграм доставщика", "courier_tg", "string", "", "pizzeria")
-    # create_or_update_field(base_url, token, "Название", "alias", "string", "Неофициальное название пиццерии", "pizzeria")
-    # create_or_update_field(base_url, token, "Широта", "latitude", "string", "Широта, координаты", "customers")
-    # create_or_update_field(base_url, token, "Долгота", "longitude", "string", "Долгота, координаты", "customers")
-
-    # # Вносим данные пиццерий
-
-    # for pizzeria in addresses:
-    #     entry_data = {
-    #         'alias': pizzeria.get('alias'),
-    #         'address': pizzeria.get('address', {0:0}).get('full'),
-    #         'latitude': pizzeria.get('coordinates', {0:0}).get('lat'),
-    #         'longitude': pizzeria.get('coordinates', {0:0}).get('lon')
-    #     }
-    #     create_entry(base_url, token, 'pizzeria', entry_data)
-
-    headers = {
-        'Authorization': token,
-        'Content-Type': 'application/json'
-    }
-    response = requests.get(f"{base_url}/v2/flows/pizzeria/entries", headers=headers)
-    response.raise_for_status()
-    for pizzeria in response.json()['data']:
-        data = {
-            'data': {
-                'type': 'entry',
-                'courier_tg': '176649151',
-                'id': pizzeria['id']
-            }
-        }
-        response_1 = requests.put(
-            f"{base_url}/v2/flows/pizzeria/entries/{pizzeria['id']}",
-            headers=headers,
-            json=data
-        )
-        response_1.raise_for_status()
-
-
-
 
 def clear_catalog(url, token):
     headers = {
@@ -87,6 +26,8 @@ def clear_catalog(url, token):
     response.raise_for_status()
 
 
+    ### Функция для первоначальной авторизации в магазине
+    
 def get_auth_token(url, client_id, store_id, client_secret):
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded'
@@ -110,6 +51,8 @@ def get_auth_token(url, client_id, store_id, client_secret):
     )
 
 
+### Функция для загрузки картинки в магазин
+
 def upload_image(url, token, image_url):
     headers = {
         'Authorization': token,
@@ -121,6 +64,8 @@ def upload_image(url, token, image_url):
     response.raise_for_status()
     return response.json()['data']['id']
 
+
+### Функция для создания товара в магазине
 
 def create_product(url, token, product_data: dict, product_image=None):
     headers = {
@@ -169,6 +114,8 @@ def create_product(url, token, product_data: dict, product_image=None):
     response.raise_for_status()
 
 
+### Функция для создания Flow в магазине
+
 def create_flow(
     url,
     token,
@@ -199,6 +146,8 @@ def create_flow(
     print(response.json())
     return response.json()['data']['id']
 
+
+### Функция для создания либо обновления поля во Flow
 
 def create_or_update_field(
     url,
@@ -267,6 +216,8 @@ def create_or_update_field(
     response.raise_for_status()
 
 
+### Функция для создания записи во Flow
+
 def create_entry(url, token, flow_slug, entry_data: dict):
     data = {
         'data': entry_data
@@ -283,7 +234,3 @@ def create_entry(url, token, flow_slug, entry_data: dict):
     )
     response.raise_for_status()
     pprint(response.json())
-
-
-if __name__ == '__main__':
-    main()
