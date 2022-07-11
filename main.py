@@ -1,8 +1,6 @@
 import json
 import os
 
-from pprint import pprint
-
 import requests
 
 from dotenv import load_dotenv
@@ -21,7 +19,6 @@ def clear_catalog(url, token):
             f"{url}/v2/products/{pizza['id']}",
             headers=headers
         )
-        print(response.text)
     response = requests.get(f"{url}/v2/products", headers=headers)
     response.raise_for_status()
 
@@ -143,7 +140,6 @@ def create_flow(
         headers=headers
     )
     response.raise_for_status()
-    print(response.json())
     return response.json()['data']['id']
 
 
@@ -182,7 +178,6 @@ def create_or_update_field(
     }
     response = requests.get(f"{url}/v2/flows/", headers=headers)
     response.raise_for_status()
-    pprint(response.json())
     for flow in response.json()['data']:
         if flow['slug'] == base_flow:
             flow_id = flow['id']
@@ -204,7 +199,6 @@ def create_or_update_field(
             headers=headers,
             json=data
         )
-        print(response.text)
         response.raise_for_status()
         return
     response = requests.post(
@@ -212,7 +206,6 @@ def create_or_update_field(
         headers=headers,
         json=data
     )
-    print(response.text)
     response.raise_for_status()
 
 
@@ -233,4 +226,3 @@ def create_entry(url, token, flow_slug, entry_data: dict):
         json=data
     )
     response.raise_for_status()
-    pprint(response.json())
