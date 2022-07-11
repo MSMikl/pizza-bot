@@ -283,7 +283,7 @@ def order_delivery(update: Update, context: CallbackContext):
     if query.data == 'self_pickup':
         context.bot.send_message(
             chat_id=update.effective_chat.id,
-            text='Отлично ждем вас в нашей пиццерии'
+            text='Отлично. Ждем вас в нашей пиццерии'
         )
         message = update.effective_message
         context.bot.delete_message(
@@ -294,53 +294,78 @@ def order_delivery(update: Update, context: CallbackContext):
 
     # Сохраняем телеграм-чат курьера для последующей отправки ему уведомления в случае успешной оплаты заказа
     # и стоимость доставки
-    context.bot_data['courier_tg'], delivery_cost = map(int, query.data.split('/'))
+    context.bot_data['courier_tg'], context.bot_data['delivery_cost'] = map(int, query.data.split('/'))
 
-    # Извлекаем корзину и отправляем счет на ее оплату 
-    cart = get_cart(
+    context.bot_data['cart'] = get_cart(
         context.bot_data['store_token'],
         context.bot_data['base_url'],
         update.effective_chat.id
     )
 
+    keyboard = [
+        [InlineKeyboardButton('Наличными курьеру', callback_data='cash')],
+        [InlineKeyboardButton('Картой онлайн', callback_data='card')]
+    ]
+
     context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=dedent(f"""
-            Итак, ваш заказ:\n{make_cart_description(cart)}
-            Стоимость доставки: {delivery_cost}
-            Общая стоимость заказа: {cart['total_price']+delivery_cost}""")
+            Итак, ваш заказ:\n{make_cart_description(context.bot_data['cart'])}
+            Стоимость доставки: {context.bot_data['delivery_cost']}
+            Общая стоимость заказа: {context.bot_data['cart']['total_price'] + context.bot_data['delivery_cost']}
+            Хотите оплатить картой онлайн или наличными курьеру?"""),
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
+    
+    message = update.effective_message
+    context.bot.delete_message(
+        chat_id=message.chat_id,
+        message_id=message.message_id
+    )
+
+    return 'AWAITING_PAYMENT_MODE'
+
+
+def choose_payment_mode(update: Update, context: CallbackContext):
+    if update.callback_query.data == 'cash':
+        context.bot_data['payment'] = 'cash'
+        message = update.effective_message
+        context.bot.delete_message(
+            chat_id=message.chat_id,
+            message_id=message.message_id
+        )
+        return send_final_messages(update, context)
 
     context.bot.send_invoice(
         chat_id=update.effective_chat.id,
         title='Ваш заказ',
-        description=f"Общая стоимость заказа {cart['total_price']} р.",
+        description=f"Общая стоимость заказа {context.bot_data['cart']['total_price']} р.",
         provider_token=os.getenv('PAYMENT_TOKEN'),
         currency='RUB',
-        prices=[LabeledPrice('Общая сумма', (cart['total_price'] + delivery_cost) * 100)],
+        prices=[LabeledPrice('Общая сумма', (context.bot_data['cart']['total_price'] + context.bot_data['delivery_cost']) * 100)],
         payload="Test_payment"
     )
-
-    return 'AWAITING_PAYMENT'
 
 
 def send_final_messages(update: Update, context: CallbackContext):
 
     context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text='Оплата завершена. Передали заказ в доставку. Ожидайте курьера в течение часа'
+        text='Передали заказ в доставку. Ожидайте курьера в течение часа'
     )
 
     # Отправка заказа курьеру для доставки
-    cart = get_cart(
-        context.bot_data['store_token'],
-        context.bot_data['base_url'],
-        update.effective_chat.id
-    )
+
+    if context.bot_data['payment'] == 'cash':
+        payment_mode_text= 'Оплата наличными на месте'
+    else:
+        payment_mode_text = 'Заказ оплачен картой'
 
     context.bot.send_message(
         chat_id=context.bot_data['courier_tg'],
-        text=f"Заказ для доставки:\n{make_cart_description(cart)}"
+        text=dedent(f"""Заказ для доставки:\n{make_cart_description(context.bot_data.get('cart'))} р.
+                    Общая стоимость заказа: {context.bot_data['cart']['total_price'] + context.bot_data['delivery_cost']} р.
+                    {payment_mode_text}""")
     )
     context.bot.send_location(
         chat_id=context.bot_data['courier_tg'],
@@ -354,6 +379,7 @@ def send_final_messages(update: Update, context: CallbackContext):
         3600,  # Задержка отправки follow-up сообщения в секундах
         context=update.effective_chat.id
     )
+    return 'FINISH'
 
 
 def send_follow_up_message(context: CallbackContext):
@@ -409,7 +435,8 @@ def user_input_handler(update: Update, context: CallbackContext):
         'HANDLE_MENU': handle_menu,
         'HANDLE_CART': handle_cart,
         'WAITING_LOCATION': get_coordinates,
-        'PICKUP_OR_DELIVERY': order_delivery
+        'PICKUP_OR_DELIVERY': order_delivery,
+        'AWAITING_PAYMENT_MODE': choose_payment_mode
     }
 
     state_handler = states_function[user_state]
