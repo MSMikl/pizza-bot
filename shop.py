@@ -60,7 +60,21 @@ def add_item_to_cart(token, url, cart_id, sku, quantity):
         json=data
     )
     response.raise_for_status()
-    return extract_data_from_cart(response.json())
+    cart = response.json()
+    selected_data = {
+        'items': [
+            {
+                'name': item['name'],
+                'quantity': item['quantity'],
+                'unit_price': item['unit_price']['amount'],
+                'id': item['id']
+            }
+            for item in cart['data']
+        ],
+        'total_price': cart['meta']['display_price']['with_tax']['amount']
+    }
+    
+    return selected_data
 
 
 def delete_item(token, url, cart_id, item_id):
@@ -72,7 +86,20 @@ def delete_item(token, url, cart_id, item_id):
         headers=headers,
         )
     response.raise_for_status()
-    return extract_data_from_cart(response.json())
+    cart = response.json()
+    selected_data = {
+        'items': [
+            {
+                'name': item['name'],
+                'quantity': item['quantity'],
+                'unit_price': item['unit_price']['amount'],
+                'id': item['id']
+            }
+            for item in cart['data']
+        ],
+        'total_price': cart['meta']['display_price']['with_tax']['amount']
+    }    
+    return selected_data
 
 
 def get_cart(token, url, cart_id):
@@ -84,10 +111,7 @@ def get_cart(token, url, cart_id):
         headers=headers
     )
     response.raise_for_status()
-    return extract_data_from_cart(response.json())
-
-
-def extract_data_from_cart(cart_response_json):
+    cart = response.json()
     selected_data = {
         'items': [
             {
@@ -96,10 +120,10 @@ def extract_data_from_cart(cart_response_json):
                 'unit_price': item['unit_price']['amount'],
                 'id': item['id']
             }
-            for item in cart_response_json['data']
+            for item in cart['data']
         ],
-        'total_price': cart_response_json['meta']['display_price']['with_tax']['amount']
-    }
+        'total_price': cart['meta']['display_price']['with_tax']['amount']
+    }    
     return selected_data
 
 
@@ -157,7 +181,10 @@ def get_pizzerias(token, url):
     headers = {
         "Authorization": token
     }
-    response = requests.get(f"{url}/v2/flows/pizzeria/entries", headers=headers)
+    response = requests.get(
+        f"{url}/v2/flows/pizzeria/entries",
+        headers=headers
+    )
     response.raise_for_status()
     return response.json().get('data')
 
