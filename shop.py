@@ -30,6 +30,23 @@ def get_products(token, url, id=None):
     return response.json()
 
 
+def get_products_by_category_id(token, url, category_id):
+    headers = {
+        'Authorization': token
+    }
+    params = {
+        'filter': f'eq(category.id,{category_id})'
+    }
+    response = requests.get(
+        f'{url}/v2/products/',
+        headers=headers,
+        params=params
+    )
+    response.raise_for_status()
+    return response.json()
+    
+
+
 def get_file_link(token, url, id):
     headers = {
         'Authorization': token

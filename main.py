@@ -6,7 +6,6 @@ import requests
 from dotenv import load_dotenv
 
 
-
 def clear_catalog(url, token):
     headers = {
         'Authorization': token,
@@ -22,9 +21,9 @@ def clear_catalog(url, token):
     response = requests.get(f"{url}/v2/products", headers=headers)
     response.raise_for_status()
 
+    # Функция для первоначальной авторизации в магазине
 
-    ### Функция для первоначальной авторизации в магазине
-    
+
 def get_auth_token(url, client_id, store_id, client_secret):
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded'
@@ -47,8 +46,8 @@ def get_auth_token(url, client_id, store_id, client_secret):
         auth_info.get('expires_in')
     )
 
+# Функция для загрузки картинки в магазин
 
-### Функция для загрузки картинки в магазин
 
 def upload_image(url, token, image_url):
     headers = {
@@ -61,8 +60,8 @@ def upload_image(url, token, image_url):
     response.raise_for_status()
     return response.json()['data']['id']
 
+# Функция для создания товара в магазине
 
-### Функция для создания товара в магазине
 
 def create_product(url, token, product_data: dict, product_image=None):
     headers = {
@@ -226,3 +225,41 @@ def create_entry(url, token, flow_slug, entry_data: dict):
         json=data
     )
     response.raise_for_status()
+    
+
+def create_category(url, token, category_name, desсription=None):
+    data = {
+        "data": {
+            "type": "category",
+            "name": category_name,
+            "slug": category_name,
+            "description": desсription,
+            "status": "live"
+        }
+    }
+    headers = {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+    }
+    response = requests.post(
+        f"{url}/v2/categories/",
+        headers=headers,
+        json=data
+    )
+    response.raise_for_status()
+    print(response.json())
+    
+    
+def main():
+    load_dotenv()
+    url = 'https://api.moltin.com'
+    shop_token, _ = get_auth_token(url, os.getenv('CLIENT_ID'), os.getenv('STORE_ID'), os.getenv('CLIENT_SECRET'))
+    # headers = {
+    #     'Authorization': shop_token,
+    # }
+    # response = requests.get(url=f"{url}/v2/categories", headers=headers)
+    # print(response.json())
+    create_category(url, shop_token, 'spicy', 'Острые пиццы')
+    
+if __name__ == '__main__':
+    main()
