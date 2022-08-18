@@ -1,5 +1,5 @@
+import json
 import os
-from sre_constants import CATEGORY
 
 import redis
 import requests
@@ -39,14 +39,13 @@ def verify():
 
 
 def handle_start(sender_id, message_text, postback):
-    send_menu(sender_id, CATEGORIES['front_page'])
+    send_menu(sender_id)
     return "MENU_AWAITING"
 
 
 def handle_menu(sender_id, message_text, postback):
     if postback:
-        if postback['payload'] in CATEGORIES.values():
-            print(postback['payload'])
+        if postback['payload'] in CATEGORIES.keys():
             send_menu(sender_id, postback['payload'])
             return 'MENU_AWAITING'
         elif postback['title'] == 'Корзина':
@@ -122,8 +121,9 @@ def webhook():
     return "ok", 200
 
 
-def send_menu(recipient_id, category_id=CATEGORIES['front_page']):
-    products = get_products_by_category_id(SHOP_TOKEN, URL, category_id)['data']
+def send_menu(recipient_id, category='front_page'):
+    products = json.loads(DATABASE.get(category))['data']
+    # get_products_by_category_id(SHOP_TOKEN, URL, CATEGORIES[category])['data']
     http_proxy = os.environ['HTTP_PROXY']
     proxies = { 
               "http": http_proxy,
@@ -186,17 +186,17 @@ def send_menu(recipient_id, category_id=CATEGORIES['front_page']):
                                     {
                                         "type": "postback",
                                         "title": "Особые",
-                                        "payload": CATEGORIES['special']
+                                        "payload": 'special'
                                     },
                                     {
                                         "type": "postback",
                                         "title": "Сытные",
-                                        "payload": CATEGORIES['nourishing']                               
+                                        "payload": 'nourishing'
                                     },
                                     {
                                         "type": "postback",
                                         "title": "Острые",
-                                        "payload": CATEGORIES['spicy']
+                                        "payload": 'spicy'
                                     }
                                 ]
                         }                        
@@ -299,6 +299,9 @@ def send_message(recipient_id, message_text):
 
 
 if __name__ == '__main__':
+    for category, id in CATEGORIES.items():
+        menu = json.dumps(get_products_by_category_id(SHOP_TOKEN, URL, id))
+        DATABASE.set(category, menu)
     host = os.environ['FLASK_HOST']
     port = os.environ['FLASK_PORT']
     app.run(host=host, port=port)
