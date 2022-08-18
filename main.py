@@ -254,12 +254,12 @@ def main():
     load_dotenv()
     url = 'https://api.moltin.com'
     shop_token, _ = get_auth_token(url, os.getenv('CLIENT_ID'), os.getenv('STORE_ID'), os.getenv('CLIENT_SECRET'))
-    headers = {
-        'Authorization': shop_token,
-    }
-    response = requests.get(url=f"{url}/v2/categories", headers=headers)
-    print(response.json())
-    # create_category(url, shop_token, 'spicy', 'Острые пиццы')
+    # headers = {
+    #     'Authorization': shop_token,
+    # }
+    # response = requests.get(url=f"{url}/v2/categories", headers=headers)
+    # print(response.json())
+    create_category(url, shop_token, 'spicy', 'Острые пиццы')
     
 if __name__ == '__main__':
     main()
