@@ -7,11 +7,14 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, request
 
-from shop import get_auth_token, get_products, get_file_link
+from shop import get_auth_token, get_products, get_file_link, get_products_by_category_id
 
 load_dotenv()
 URL = 'https://api.moltin.com'
 SHOP_TOKEN, _ = get_auth_token(URL, os.getenv('CLIENT_ID'), os.getenv('CLIENT_SECRET'))
+CATEGORIES = {
+    'front_page': '853639e2-b8de-41f8-99c5-cf26496e96f9'
+}
 app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
@@ -45,7 +48,7 @@ def webhook():
 
 
 def send_menu(recipient_id):
-    products = get_products(SHOP_TOKEN, URL)['data'][:5]
+    products = get_products_by_category_id(SHOP_TOKEN, URL, CATEGORIES['front_page'])['data']
     http_proxy = os.environ['HTTP_PROXY']
     proxies = { 
               "http": http_proxy,
@@ -98,6 +101,30 @@ def send_menu(recipient_id):
                                 }
                             ]
                         } for product in products
+                    ] + [
+                        {
+                            "title": "Не нашли пиццу по вкусу?",
+                            "subtitle": 'Другие категории здесь',
+                            "image_url": "https://primepizza.ru/uploads/position/large_0c07c6fd5c4dcadddaf4a2f1a2c218760b20c396.jpg",
+                            "buttons":
+                                [
+                                    {
+                                        "type": "postback",
+                                        "title": "Особые",
+                                        "payload": "Особые"
+                                    },
+                                    {
+                                        "type": "postback",
+                                        "title": "Сытные",
+                                        "payload": "Сытные"                               
+                                    },
+                                    {
+                                        "type": "postback",
+                                        "title": "Острые",
+                                        "payload": "Острые"
+                                    }
+                                ]
+                        }                        
                     ]
                 }
             }
