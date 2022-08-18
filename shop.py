@@ -44,8 +44,7 @@ def get_products_by_category_id(token, url, category_id):
     )
     response.raise_for_status()
     return response.json()
-    
-
+ 
 
 def get_file_link(token, url, id):
     headers = {
