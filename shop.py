@@ -44,8 +44,7 @@ def get_products_by_category_id(token, url, category_id):
     )
     response.raise_for_status()
     return response.json()
-    
-
+ 
 
 def get_file_link(token, url, id):
     headers = {
@@ -78,13 +77,17 @@ def add_item_to_cart(token, url, cart_id, sku, quantity):
     )
     response.raise_for_status()
     cart = response.json()
+    print(cart)
     selected_data = {
         'items': [
             {
                 'name': item['name'],
                 'quantity': item['quantity'],
                 'unit_price': item['unit_price']['amount'],
-                'id': item['id']
+                'id': item['id'],
+                'image': item['image']['href'],
+                'description': item.get('description'),
+                'sku': item['sku']
             }
             for item in cart['data']
         ],
@@ -110,7 +113,10 @@ def delete_item(token, url, cart_id, item_id):
                 'name': item['name'],
                 'quantity': item['quantity'],
                 'unit_price': item['unit_price']['amount'],
-                'id': item['id']
+                'id': item['id'],
+                'image': item['image']['href'],
+                'description': item.get('description'),
+                'sku': item['sku']
             }
             for item in cart['data']
         ],
@@ -135,7 +141,10 @@ def get_cart(token, url, cart_id):
                 'name': item['name'],
                 'quantity': item['quantity'],
                 'unit_price': item['unit_price']['amount'],
-                'id': item['id']
+                'id': item['id'],
+                'image': item['image']['href'],
+                'description': item.get('description'),
+                'sku': item['sku']
             }
             for item in cart['data']
         ],
