@@ -90,7 +90,6 @@ def handle_users_reply(sender_id, message_text, postback):
         user_state = recorded_state.decode('utf-8')
     if message_text == "/start":
         user_state = "START"
-    print(user_state)
     state_handler = states_functions[user_state]
     next_state = state_handler(sender_id, message_text, postback)
     DATABASE.set(f"fb_{sender_id}", next_state.encode('utf-8'))
@@ -102,7 +101,6 @@ def webhook():
     Основной вебхук, на который будут приходить сообщения от Facebook.
     """
     data = request.get_json()
-    print(data)
     message_text=None
     postback=None
     if data["object"] == "page":
@@ -210,7 +208,6 @@ def send_menu(recipient_id, category='front_page'):
 
 
 def send_cart(recipient_id, cart):
-    print(cart)
     http_proxy = os.environ['HTTP_PROXY']
     proxies = { 
               "http": http_proxy,
@@ -274,7 +271,6 @@ def send_cart(recipient_id, cart):
         }
     }
     response = requests.post("https://graph.facebook.com/v14.0/me/messages", params=params, headers=headers, json=request_content, proxies=proxies)
-    print(response.json())
     response.raise_for_status()   
 
 
