@@ -3,6 +3,8 @@ import os
 
 import redis
 import requests
+
+from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from flask import Flask, request
 
@@ -13,6 +15,7 @@ def main():
 
     load_dotenv()
     URL = 'https://api.moltin.com'
+    
     SHOP_TOKEN, _ = get_auth_token(URL, os.getenv('CLIENT_ID'), os.getenv('CLIENT_SECRET'))
     CATEGORIES = {
         'front_page': '853639e2-b8de-41f8-99c5-cf26496e96f9',
@@ -39,12 +42,43 @@ def main():
             return request.args["hub.challenge"], 200
 
         return "Hello world", 200
-
+    
+    @app.route('/moltin/', methods=['POST'])
+    def update_menu():
+        if not request.headers.get('X-Moltin-Secret-Key') == os.environ['FB_VERIFY_TOKEN']:
+            return 'Bad request', 400
+        for category, id in CATEGORIES.items():
+            menu = json.dumps(get_products_by_category_id(SHOP_TOKEN, URL, id))
+        DATABASE.set(category, menu)
+        return "Menu updated", 201        
 
     def handle_start(sender_id, message_text, postback):
         send_menu(sender_id)
         return "MENU_AWAITING"
 
+    @app.route('/', methods=['POST'])
+    def webhook():
+        """
+        Основной вебхук, на который будут приходить сообщения от Facebook.
+        """
+        data = request.get_json()
+        message_text = None
+        postback = None
+        if not data["object"] == "page":
+            return "ok", 200
+        for entry in data["entry"]:
+            for messaging_event in entry["messaging"]:
+                if messaging_event.get("message"):  # someone sent us a message
+                    sender_id = messaging_event["sender"]["id"]  # the facebook ID of the person sending you the message
+                    recipient_id = messaging_event["recipient"]["id"] # the recipient's ID, which should be your page's facebook ID
+                    message_text = messaging_event['message']["text"] # the message's text
+                    handle_users_reply(sender_id, message_text, postback)
+                elif messaging_event.get('postback'):
+                    sender_id = messaging_event["sender"]["id"]
+                    postback = messaging_event.get('postback')
+
+                    handle_users_reply(sender_id, message_text, postback)
+        return "ok", 200
 
     def handle_menu(sender_id, message_text, postback):
         if postback:
@@ -94,30 +128,6 @@ def main():
         state_handler = states_functions[user_state]
         next_state = state_handler(sender_id, message_text, postback)
         DATABASE.set(f"fb_{sender_id}", next_state.encode('utf-8'))
-
-    @app.route('/', methods=['POST'])
-    def webhook():
-        """
-        Основной вебхук, на который будут приходить сообщения от Facebook.
-        """
-        data = request.get_json()
-        message_text=None
-        postback=None
-        if not data["object"] == "page":
-            return "ok", 200
-        for entry in data["entry"]:
-            for messaging_event in entry["messaging"]:
-                if messaging_event.get("message"):  # someone sent us a message
-                    sender_id = messaging_event["sender"]["id"]  # the facebook ID of the person sending you the message
-                    recipient_id = messaging_event["recipient"]["id"] # the recipient's ID, which should be your page's facebook ID
-                    message_text = messaging_event['message']["text"] # the message's text
-                    handle_users_reply(sender_id, message_text, postback)
-                elif messaging_event.get('postback'):
-                    sender_id = messaging_event["sender"]["id"]
-                    postback = messaging_event.get('postback')
-
-                    handle_users_reply(sender_id, message_text, postback)
-        return "ok", 200
 
     def send_menu(recipient_id, category='front_page'):
         products = json.loads(DATABASE.get(category))['data']
@@ -290,9 +300,47 @@ def main():
         response = requests.post("https://graph.facebook.com/v14.0/me/messages", params=params, headers=headers, json=request_content, proxies=proxies)
         response.raise_for_status()
 
+    def set_moltin_webhook(url, shop_token):
+        headers = {
+            'Authorization': shop_token,
+            'Content-Type': 'application/json'
+        }
+        data = {
+            'data': {
+                "type": "integration",
+                "name": "Product change notification",
+                "description": "Send message about menu updating",
+                "enabled": True,
+                "observes": [
+                    "product.created",
+                    'product.updated',
+                    'product.deleted',
+                ],
+                "integration_type": "webhook",
+                "configuration": {
+                    "url": "https://fb.michalbl4.ru/moltin/",
+                    "secret_key": os.environ['FB_VERIFY_TOKEN'],
+                }
+            }
+        }
+        response = requests.post(
+            f"{url}/v2/integrations",
+            headers=headers,
+            json=data,
+        )
+        response.raise_for_status()
+
+    def refresh_token():
+        SHOP_TOKEN, _ = get_auth_token(URL, os.getenv('CLIENT_ID'), os.getenv('CLIENT_SECRET'))
+
     for category, id in CATEGORIES.items():
         menu = json.dumps(get_products_by_category_id(SHOP_TOKEN, URL, id))
         DATABASE.set(category, menu)
+    set_moltin_webhook(URL, SHOP_TOKEN)
+    
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(refresh_token, trigger="interval", seconds=3600)
+    
     host = os.environ['FLASK_HOST']
     port = os.environ['FLASK_PORT']
     app.run(host=host, port=port)
